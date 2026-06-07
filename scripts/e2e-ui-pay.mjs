@@ -1,0 +1,18 @@
+import { chromium } from '@playwright/test';
+const browser = await chromium.launch({ headless: true });
+const page = await browser.newPage({ viewport: { width: 1440, height: 980 } });
+page.on('dialog', d => d.accept());
+await page.goto('http://localhost:5173/login');
+await page.getByLabel('E-mail').fill('calebesaraiva60@gmail.com');
+await page.getByLabel('Senha').fill('Acesso@202425');
+await page.getByRole('button', { name: /Entrar no sistema/i }).click();
+await page.getByText('Dashboard financeiro').waitFor();
+await page.getByRole('link', { name: /^Cobranças$/i }).click();
+await page.getByRole('heading', { name: /^Cobranças$/ }).waitFor();
+const count = await page.getByRole('button', { name: /^Pagar$/ }).count();
+console.log('pay buttons=' + count);
+if (!count) throw new Error('Nenhum botão Pagar encontrado');
+await page.getByRole('button', { name: /^Pagar$/ }).first().click();
+await page.getByText('Pagamento confirmado').waitFor({ timeout: 10000 });
+console.log('UI_PAY_E2E_OK');
+await browser.close();

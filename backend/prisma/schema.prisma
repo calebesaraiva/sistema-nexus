@@ -1,0 +1,332 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  ADMIN_MASTER
+  ADMIN
+  FINANCEIRO
+  VENDEDOR
+  SUPORTE
+}
+
+enum ClientStatus {
+  ativo
+  inativo
+  prospecto
+  inadimplente
+}
+
+enum ContractStatus {
+  ativo
+  vencido
+  cancelado
+  inadimplente
+  encerrado
+}
+
+enum ChargeType {
+  mensalidade
+  implantacao
+  avulsa
+}
+
+enum ChargeStatus {
+  pendente
+  pago
+  vencido
+  cancelado
+}
+
+enum PaymentMethod {
+  pix
+  boleto
+  cartao
+  dinheiro
+  transferencia
+  outro
+}
+
+enum MessageType {
+  lembrete_pagamento
+  cobranca_vencida
+  boas_vindas
+  contrato_ativo
+  mensagem_manual
+}
+
+enum MessageChannel {
+  whatsapp
+  email
+  manual
+}
+
+enum MessageStatus {
+  gerada
+  enviada
+  erro
+}
+
+enum ProjectStatus {
+  planejado
+  em_andamento
+  aguardando_cliente
+  concluido
+  pausado
+  cancelado
+}
+
+enum NoteType {
+  geral
+  financeiro
+  suporte
+  comercial
+}
+
+model User {
+  id                         String     @id @default(uuid())
+  nome                       String
+  email                      String     @unique
+  senhaHash                  String
+  role                       Role       @default(SUPORTE)
+  ativo                      Boolean    @default(true)
+  emailVerificado            Boolean    @default(false)
+  emailVerificationCodeHash  String?
+  emailVerificationExpiresAt DateTime?
+  passwordResetCodeHash      String?
+  passwordResetExpiresAt     DateTime?
+  ultimoLogin                DateTime?
+  criadoEm                   DateTime   @default(now())
+  atualizadoEm               DateTime   @updatedAt
+  notes                      ClientNote[]
+  auditLogs                  AuditLog[]
+  assignedTasks              ProjectTask[] @relation("AssignedTasks")
+  approvedTasks              ProjectTask[] @relation("ApprovedTasks")
+}
+
+model Client {
+  id              String        @id @default(uuid())
+  nomeEmpresa     String
+  nomeResponsavel String
+  cpfCnpj         String?
+  email           String?
+  telefone        String?
+  whatsapp        String?
+  cidade          String?
+  estado          String?
+  endereco        String?
+  segmento        String?
+  status          ClientStatus  @default(prospecto)
+  observacoes     String?
+  deletedAt       DateTime?
+  criadoEm        DateTime      @default(now())
+  atualizadoEm    DateTime      @updatedAt
+  contracts       Contract[]
+  charges         Charge[]
+  payments        Payment[]
+  projects        Project[]
+  notes           ClientNote[]
+  messageLogs     MessageLog[]
+}
+
+model Product {
+  id          String            @id @default(uuid())
+  nome        String            @unique
+  descricao   String?
+  categoria   String?
+  precoBase   Decimal           @default(0)
+  ativo       Boolean           @default(true)
+  packages    PackageService[]
+  services    ContractedService[]
+  tasks       ProjectTask[]
+}
+
+model Package {
+  id               String            @id @default(uuid())
+  nome             String            @unique
+  descricao        String?
+  valorMensal      Decimal           @default(0)
+  valorImplantacao Decimal           @default(0)
+  ativo            Boolean           @default(true)
+  products         PackageService[]
+  contracts        Contract[]
+}
+
+model PackageService {
+  id        String  @id @default(uuid())
+  packageId String
+  productId String
+  package   Package @relation(fields: [packageId], references: [id], onDelete: Cascade)
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model Contract {
+  id                              String              @id @default(uuid())
+  clientId                        String
+  packageId                       String?
+  titulo                          String
+  descricao                       String?
+  dataInicio                      DateTime
+  dataFim                         DateTime
+  validadeMeses                   Int
+  diaPagamentoMensal              Int
+  valorMensal                     Decimal
+  valorTotalContrato              Decimal
+  valorImplantacao                Decimal             @default(0)
+  entrada                         Decimal             @default(0)
+  implantacaoParcelada            Boolean             @default(false)
+  quantidadeParcelasImplantacao   Int?
+  status                          ContractStatus      @default(ativo)
+  arquivoContratoUrl              String?
+  observacoes                     String?
+  criadoEm                        DateTime            @default(now())
+  atualizadoEm                    DateTime            @updatedAt
+  client                          Client              @relation(fields: [clientId], references: [id])
+  package                         Package?            @relation(fields: [packageId], references: [id])
+  charges                         Charge[]
+  services                        ContractedService[]
+  projects                        Project[]
+}
+
+model ContractedService {
+  id              String   @id @default(uuid())
+  contractId      String
+  productId       String?
+  nomeServico     String
+  descricao       String?
+  valorIndividual Decimal?
+  contract        Contract @relation(fields: [contractId], references: [id], onDelete: Cascade)
+  product         Product? @relation(fields: [productId], references: [id])
+}
+
+model Charge {
+  id              String        @id @default(uuid())
+  clientId        String
+  contractId      String?
+  tipo            ChargeType
+  descricao       String
+  valor           Decimal
+  dataVencimento  DateTime
+  dataPagamento   DateTime?
+  status          ChargeStatus  @default(pendente)
+  metodoPagamento PaymentMethod?
+  observacoes     String?
+  client          Client        @relation(fields: [clientId], references: [id])
+  contract        Contract?     @relation(fields: [contractId], references: [id])
+  payments        Payment[]
+  messageLogs     MessageLog[]
+}
+
+model Payment {
+  id              String         @id @default(uuid())
+  chargeId        String
+  clientId        String
+  valorPago       Decimal
+  dataPagamento   DateTime       @default(now())
+  metodoPagamento PaymentMethod
+  comprovanteUrl  String?
+  observacoes     String?
+  charge          Charge         @relation(fields: [chargeId], references: [id])
+  client          Client         @relation(fields: [clientId], references: [id])
+}
+
+model MessageTemplate {
+  id          String       @id @default(uuid())
+  nome        String
+  tipo        MessageType
+  conteudo    String
+  ativo       Boolean      @default(true)
+  messageLogs MessageLog[]
+}
+
+model MessageLog {
+  id         String           @id @default(uuid())
+  clientId   String
+  chargeId   String?
+  templateId String?
+  canal      MessageChannel
+  mensagem   String
+  status     MessageStatus    @default(gerada)
+  enviadoEm  DateTime?
+  client     Client           @relation(fields: [clientId], references: [id])
+  charge     Charge?          @relation(fields: [chargeId], references: [id])
+  template   MessageTemplate? @relation(fields: [templateId], references: [id])
+}
+
+model Project {
+  id            String        @id @default(uuid())
+  clientId      String
+  contractId    String?
+  titulo        String
+  descricao     String?
+  status        ProjectStatus @default(planejado)
+  dataInicio    DateTime?
+  dataPrazo     DateTime?
+  dataConclusao DateTime?
+  client        Client        @relation(fields: [clientId], references: [id])
+  contract      Contract?     @relation(fields: [contractId], references: [id])
+  tasks         ProjectTask[]
+}
+
+model TaskStage {
+  id        String        @id @default(uuid())
+  nome      String
+  setor     String
+  ordem     Int           @default(0)
+  ativo     Boolean       @default(true)
+  createdAt DateTime      @default(now())
+  tasks     ProjectTask[]
+}
+
+model ProjectTask {
+  id            String    @id @default(uuid())
+  projectId     String
+  stageId       String
+  productId     String?
+  responsavelId String?
+  approvedById  String?
+  titulo        String
+  descricao     String?
+  status        String    @default("pendente")
+  prioridade    String    @default("media")
+  prazo         DateTime?
+  aprovadoEm    DateTime?
+  recusadoEm    DateTime?
+  motivoRecusa  String?
+  criadoEm      DateTime  @default(now())
+  atualizadoEm  DateTime  @updatedAt
+  project       Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  stage         TaskStage @relation(fields: [stageId], references: [id])
+  product       Product?  @relation(fields: [productId], references: [id])
+  responsavel   User?     @relation("AssignedTasks", fields: [responsavelId], references: [id])
+  aprovadoPor   User?     @relation("ApprovedTasks", fields: [approvedById], references: [id])
+}
+
+model ClientNote {
+  id       String   @id @default(uuid())
+  clientId String
+  userId   String
+  texto    String
+  tipo     NoteType @default(geral)
+  criadoEm DateTime @default(now())
+  client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  user     User     @relation(fields: [userId], references: [id])
+}
+
+model AuditLog {
+  id        String   @id @default(uuid())
+  userId    String?
+  action    String
+  entity    String
+  entityId  String?
+  metadata  Json?
+  ip        String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  user      User?    @relation(fields: [userId], references: [id])
+}
