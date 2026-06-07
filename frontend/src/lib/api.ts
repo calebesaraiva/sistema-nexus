@@ -2,7 +2,7 @@ import axios from 'axios';
 import { toast } from 'sonner';
 
 export const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || 'http://localhost:3333/api'
+  baseURL: import.meta.env.VITE_API_URL || (import.meta.env.DEV ? 'http://localhost:3333/api' : '/api')
 });
 
 api.interceptors.request.use((config) => {
