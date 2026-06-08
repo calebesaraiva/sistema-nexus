@@ -20,7 +20,8 @@ type ContractRecord = AnyRecord & {
   descricaoPermuta?: string;
   statusPermuta?: string;
 };
-type ClientDetail = AnyRecord & { contracts?: ContractRecord[]; charges?: AnyRecord[] };
+type ClientDocument = { id: string; tipo: string; nomeArquivo: string; criadoEm: string; tamanho: number; contractId?: string };
+type ClientDetail = AnyRecord & { contracts?: ContractRecord[]; charges?: AnyRecord[]; documents?: ClientDocument[] };
 const endpoints: Record<string, string> = {
   clients: '/clients', contracts: '/contracts', charges: '/charges', payments: '/payments', products: '/products', packages: '/packages', projects: '/projects', users: '/users', audit: '/audit-logs', messages: '/message-templates', financial: '/dashboard/financial'
 };
@@ -83,6 +84,15 @@ function ClientDetailView({ title, client, loading, error }: { title: string; cl
   if (error || !client) return <section><Header title={title} /><div className="panel"><EmptyState title="Cliente não encontrado" text="Não foi possível carregar os dados vinculados." /></div></section>;
   const contracts = client.contracts || [];
   const barterContracts = contracts.filter((contract) => contract.tipoRecebimento === 'permuta' || contract.tipoRecebimento === 'misto');
+  async function downloadDocument(item: ClientDocument) {
+    const response = await api.get<Blob, Blob>(`/documents/${item.id}/download`, { responseType: 'blob' });
+    const url = URL.createObjectURL(response);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = item.nomeArquivo;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
   return (
     <section>
       <Header title={String(client.nomeEmpresa || 'Detalhes do cliente')} action={String(client.email || client.nomeResponsavel || '')} />
@@ -102,6 +112,10 @@ function ClientDetailView({ title, client, loading, error }: { title: string; cl
       <div className="panel finance-list">
         <h2>Histórico de compensações</h2>
         {barterContracts.length ? barterContracts.map((contract) => <article key={contract.id}><b>{contract.titulo || 'Contrato'}</b><span>{brl(contract.valorPermuta)} · {contract.descricaoPermuta || 'Permuta sem descrição'}</span><Badge>{String(contract.statusPermuta || 'pendente')}</Badge></article>) : <span className="muted-line">Nenhum histórico de permuta para este cliente.</span>}
+      </div>
+      <div className="panel finance-list">
+        <h2>Documentos do cliente</h2>
+        {(client.documents || []).length ? client.documents!.map((item) => <article key={item.id}><b>{item.nomeArquivo}</b><span>{item.tipo} · {shortDate(item.criadoEm)} · {Math.round(Number(item.tamanho || 0) / 1024)} KB</span><Button type="button" onClick={() => downloadDocument(item)}>Baixar</Button></article>) : <span className="muted-line">Nenhum documento anexado.</span>}
       </div>
     </section>
   );

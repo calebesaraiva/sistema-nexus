@@ -109,19 +109,19 @@ export async function listClients(req: Request, res: Response) {
 }
 
 export async function getClient(req: Request, res: Response) {
-  const client = await prisma.client.findFirst({ where: { id: paramId(req.params.id), deletedAt: null }, include: { contracts: true, charges: true, notes: true } });
+  const client = await prisma.client.findFirst({ where: { id: paramId(req.params.id), deletedAt: null }, include: { contracts: { include: { documents: true, charges: true, services: true } }, charges: true, notes: true, documents: true } });
   if (!client) throw new AppError(404, 'Cliente não encontrado.');
   return ok(res, client);
 }
 
 export async function createClient(req: Request, res: Response) {
-  const client = await prisma.client.create({ data: req.body });
+  const client = await prisma.client.create({ data: { ...req.body, contratoAssinadoEm: req.body.contratoAssinadoEm ? new Date(`${req.body.contratoAssinadoEm}T00:00:00`) : undefined } });
   await audit(req, 'Criação de cliente', 'Client', client.id);
   return ok(res, client, 'Cliente criado com sucesso');
 }
 
 export async function updateClient(req: Request, res: Response) {
-  const client = await prisma.client.update({ where: { id: paramId(req.params.id) }, data: req.body });
+  const client = await prisma.client.update({ where: { id: paramId(req.params.id) }, data: { ...req.body, contratoAssinadoEm: req.body.contratoAssinadoEm ? new Date(`${req.body.contratoAssinadoEm}T00:00:00`) : null } });
   await audit(req, 'Edição de cliente', 'Client', client.id);
   return ok(res, client, 'Cliente editado com sucesso');
 }
@@ -217,6 +217,21 @@ export async function listCharges(req: Request, res: Response) {
   return ok(res, await prisma.charge.findMany({ include: { client: true, contract: true }, orderBy: { dataVencimento: 'asc' } }));
 }
 
+export async function createCharge(req: Request, res: Response) {
+  const client = await prisma.client.findFirst({ where: { id: req.body.clientId, deletedAt: null } });
+  if (!client) throw new AppError(404, 'Cliente não encontrado.');
+  const charge = await prisma.charge.create({
+    data: {
+      ...req.body,
+      dataVencimento: new Date(`${req.body.dataVencimento}T00:00:00`),
+      status: req.body.tipo === 'permuta' ? 'pendente' : undefined
+    },
+    include: { client: true, contract: true }
+  });
+  await audit(req, 'Criação de cobrança', 'Charge', charge.id, { tipo: charge.tipo, valor: charge.valor });
+  return ok(res, charge, 'Cobrança criada com sucesso');
+}
+
 export async function payCharge(req: Request, res: Response) {
   const charge = await prisma.charge.findUnique({ where: { id: paramId(req.params.id) } });
   if (!charge) throw new AppError(404, 'Cobrança não encontrada.');
@@ -235,6 +250,7 @@ export async function payCharge(req: Request, res: Response) {
     return { payment, charge: updated };
   });
   await audit(req, 'Confirmação de pagamento', 'Charge', charge.id);
+  await refreshFinancialStatuses();
   return ok(res, paid, 'Pagamento confirmado');
 }
 
@@ -255,11 +271,21 @@ export async function compensateBarter(req: Request, res: Response) {
     return barter;
   });
   await audit(req, 'Permuta marcada como compensada', 'Charge', charge.id, { status: updated.status });
+  await refreshFinancialStatuses();
   return ok(res, updated, 'Permuta compensada com sucesso');
 }
 
 export async function listPayments(_req: Request, res: Response) {
   return ok(res, await prisma.payment.findMany({ include: { client: true, charge: true }, orderBy: { dataPagamento: 'desc' } }));
+}
+
+async function refreshFinancialStatuses() {
+  const today = new Date();
+  await prisma.charge.updateMany({ where: { status: 'pendente', dataVencimento: { lt: today } }, data: { status: 'vencido' } });
+  const overdueClients = await prisma.charge.findMany({ where: { status: 'vencido' }, select: { clientId: true }, distinct: ['clientId'] });
+  const overdueClientIds = overdueClients.map((item) => item.clientId);
+  if (overdueClientIds.length) await prisma.client.updateMany({ where: { id: { in: overdueClientIds }, deletedAt: null }, data: { status: 'inadimplente' } });
+  await prisma.client.updateMany({ where: { status: 'inadimplente', deletedAt: null, charges: { none: { status: 'vencido' } } }, data: { status: 'ativo' } });
 }
 
 export async function listProjects(_req: Request, res: Response) {
@@ -286,29 +312,70 @@ export async function deleteProject(req: Request, res: Response) {
 }
 
 export async function financialDashboard(_req: Request, res: Response) {
+  await refreshFinancialStatuses();
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const [charges, allCharges, clientsActive, contractsActive, barterContracts, mixedContracts] = await Promise.all([
+  const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
+  const next30 = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 30);
+  const last12Start = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+  const [charges, allCharges, clientsActive, contractsActive, activeContracts, barterContracts, mixedContracts, payments, contractsEndingSoon] = await Promise.all([
     prisma.charge.findMany({ where: { dataVencimento: { gte: monthStart, lte: monthEnd } }, include: { client: true, contract: true } }),
     prisma.charge.findMany({ include: { client: true, contract: true } }),
     prisma.client.count({ where: { status: 'ativo', deletedAt: null } }),
     prisma.contract.count({ where: { status: 'ativo' } }),
+    prisma.contract.findMany({ where: { status: 'ativo' }, include: { client: true, documents: true } }),
     prisma.contract.findMany({ where: { status: 'ativo', tipoRecebimento: 'permuta' }, include: { client: true } }),
-    prisma.contract.findMany({ where: { status: 'ativo', tipoRecebimento: 'misto' }, include: { client: true } })
+    prisma.contract.findMany({ where: { status: 'ativo', tipoRecebimento: 'misto' }, include: { client: true } }),
+    prisma.payment.findMany({ where: { dataPagamento: { gte: last12Start } }, include: { charge: true, client: true }, orderBy: { dataPagamento: 'asc' } }),
+    prisma.contract.findMany({ where: { status: 'ativo', dataFim: { gte: now, lte: next30 } }, include: { client: true, documents: true } })
   ]);
   const cashCharges = charges.filter((c) => c.tipo !== 'permuta');
+  const cashAllCharges = allCharges.filter((c) => c.tipo !== 'permuta');
   const barterCharges = allCharges.filter((c) => c.tipo === 'permuta');
   const sum = (items: typeof charges, status?: string) => items.filter((c) => !status || c.status === status).reduce((a, c) => a + Number(c.valor), 0);
+  const paidThisMonth = cashAllCharges.filter((c) => c.status === 'pago' && c.dataPagamento && c.dataPagamento >= monthStart && c.dataPagamento <= monthEnd);
+  const monthPending = cashCharges.filter((c) => c.status === 'pendente' && c.dataVencimento >= now);
+  const monthOverdue = cashAllCharges.filter((c) => c.status === 'vencido');
+  const setupAll = cashAllCharges.filter((c) => c.tipo === 'implantacao');
+  const setupMonth = cashCharges.filter((c) => c.tipo === 'implantacao');
+  const monthlyCharges = cashCharges.filter((c) => c.tipo === 'mensalidade');
   const activeBarterValue = barterContracts.reduce((a, c) => a + Number(c.valorPermuta), 0) + mixedContracts.reduce((a, c) => a + Number(c.valorPermuta), 0);
   const monthBarter = charges.filter((c) => c.tipo === 'permuta');
   const barterCompensated = sum(barterCharges, 'compensada');
   const barterPending = sum(barterCharges.filter((c) => c.status === 'pendente' || c.status === 'parcial'));
+  const mrrAtual = activeContracts.filter((contract) => contract.tipoRecebimento !== 'permuta').reduce((a, c) => a + Number(c.valorMensal), 0);
+  const clientsWithContract = new Set(activeContracts.map((contract) => contract.clientId)).size;
+  const receitaPrevistaMes = sum(cashCharges.filter((c) => c.status !== 'cancelado'));
+  const receitaRecebidaMes = paidThisMonth.reduce((a, c) => a + Number(c.valor), 0);
+  const totalVencido = sum(monthOverdue);
+  const monthNames = Array.from({ length: 12 }).map((_, index) => {
+    const date = new Date(now.getFullYear(), now.getMonth() - 11 + index, 1);
+    return { key: `${date.getFullYear()}-${date.getMonth()}`, mes: date.toLocaleDateString('pt-BR', { month: 'short', year: '2-digit' }), start: date, end: new Date(date.getFullYear(), date.getMonth() + 1, 0, 23, 59, 59) };
+  });
+  const revenueLast12 = monthNames.map((month) => ({
+    mes: month.mes,
+    recebido: payments.filter((payment) => payment.dataPagamento >= month.start && payment.dataPagamento <= month.end && payment.charge?.tipo !== 'permuta').reduce((a, payment) => a + Number(payment.valorPago), 0)
+  }));
+  const mrrEvolution = monthNames.map((month) => ({
+    mes: month.mes,
+    mrr: activeContracts.filter((contract) => contract.dataInicio <= month.end && contract.dataFim >= month.start && contract.tipoRecebimento !== 'permuta').reduce((a, contract) => a + Number(contract.valorMensal), 0)
+  }));
   return ok(res, {
-    receitaPrevistaMes: sum(cashCharges),
-    receitaRecebidaMes: sum(cashCharges, 'pago'),
-    totalPendente: sum(cashCharges, 'pendente'),
-    totalVencido: sum(cashCharges, 'vencido'),
+    receitaPrevistaMes,
+    receitaRecebidaMes,
+    totalPendente: sum(monthPending),
+    totalVencido,
+    totalImplantacaoReceber: sum(setupAll.filter((c) => c.status === 'pendente' || c.status === 'vencido')),
+    totalImplantacaoRecebido: sum(setupAll, 'pago'),
+    saldoImplantacao: sum(setupAll.filter((c) => c.status === 'pendente' || c.status === 'vencido')),
+    implantacaoVencida: sum(setupAll.filter((c) => c.status === 'vencido')),
+    mensalidadePrevistaMes: sum(monthlyCharges.filter((c) => c.status !== 'cancelado')),
+    mensalidadeRecebidaMes: sum(monthlyCharges.filter((c) => c.status === 'pago' && c.dataPagamento && c.dataPagamento >= monthStart && c.dataPagamento <= monthEnd)),
+    mensalidadePendenteMes: sum(monthlyCharges.filter((c) => c.status === 'pendente')),
+    mrrAtual,
+    ticketMedioMensal: clientsWithContract ? mrrAtual / clientsWithContract : 0,
+    percentualInadimplencia: receitaPrevistaMes ? (totalVencido / receitaPrevistaMes) * 100 : 0,
+    taxaRecebimentoMes: receitaPrevistaMes ? (receitaRecebidaMes / receitaPrevistaMes) * 100 : 0,
     valorPermutasAtivas: activeBarterValue,
     valorPermutasMes: sum(monthBarter),
     valorPermutasPendentes: barterPending,
@@ -321,10 +388,22 @@ export async function financialDashboard(_req: Request, res: Response) {
     contratosAtivos: contractsActive,
     proximosVencimentos: cashCharges.slice(0, 8),
     clientesInadimplentes: await prisma.client.findMany({ where: { status: 'inadimplente', deletedAt: null } }),
-    receitaPorMes: [],
+    receitaPorMes: revenueLast12,
+    evolucaoMrr: mrrEvolution,
+    implantacaoResumo: [
+      { nome: 'Recebido', valor: sum(setupMonth, 'pago') },
+      { nome: 'Pendente', valor: sum(setupMonth.filter((c) => c.status === 'pendente' || c.status === 'vencido')) }
+    ],
+    mensalidadeResumo: [
+      { nome: 'Recebido', valor: sum(monthlyCharges, 'pago') },
+      { nome: 'Pendente', valor: sum(monthlyCharges.filter((c) => c.status === 'pendente' || c.status === 'vencido')) }
+    ],
     cobrancasPorStatus: ['pendente', 'pago', 'vencido', 'cancelado'].map((status) => ({ status, total: sum(cashCharges, status) })),
     permutasPorStatus: ['pendente', 'compensada', 'parcial', 'cancelado'].map((status) => ({ status, total: sum(barterCharges, status) })),
-    contratosProximosVencimento: await prisma.contract.findMany({ where: { status: 'ativo', dataFim: { lte: new Date(now.getFullYear(), now.getMonth() + 2, now.getDate()) } }, include: { client: true } })
+    implantacaoAReceber: setupAll.filter((c) => c.status === 'pendente' || c.status === 'vencido').slice(0, 8),
+    parcelasImplantacaoAtrasadas: setupAll.filter((c) => c.status === 'vencido').slice(0, 8),
+    contratosProximosVencimento: contractsEndingSoon,
+    contratosSemPdf: activeContracts.filter((contract) => !('documents' in contract) || !contract.documents?.length).slice(0, 8)
   });
 }
 

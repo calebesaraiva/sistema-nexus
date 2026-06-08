@@ -6,7 +6,7 @@ import { audit } from '../services/auditService';
 import { paramId } from '../utils/params';
 
 export async function listContracts(_req: Request, res: Response) {
-  return ok(res, await prisma.contract.findMany({ include: { client: true, package: true, charges: true }, orderBy: { criadoEm: 'desc' } }));
+  return ok(res, await prisma.contract.findMany({ include: { client: true, package: true, charges: true, documents: true, services: true }, orderBy: { criadoEm: 'desc' } }));
 }
 
 export async function createContract(req: Request, res: Response) {

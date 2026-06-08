@@ -97,6 +97,14 @@ enum NoteType {
   comercial
 }
 
+enum DocumentType {
+  contrato_assinado
+  comprovante_pagamento
+  proposta
+  documento_cliente
+  outros
+}
+
 model User {
   id                         String     @id @default(uuid())
   nome                       String
@@ -116,6 +124,7 @@ model User {
   auditLogs                  AuditLog[]
   assignedTasks              ProjectTask[] @relation("AssignedTasks")
   approvedTasks              ProjectTask[] @relation("ApprovedTasks")
+  documents                  ClientDocument[]
 }
 
 model Client {
@@ -132,6 +141,9 @@ model Client {
   segmento        String?
   status          ClientStatus  @default(prospecto)
   observacoes     String?
+  contratoAssinadoEm DateTime?
+  contratoAssinadoPorAmbasPartes Boolean @default(false)
+  observacaoContrato String?
   deletedAt       DateTime?
   criadoEm        DateTime      @default(now())
   atualizadoEm    DateTime      @updatedAt
@@ -141,6 +153,7 @@ model Client {
   projects        Project[]
   notes           ClientNote[]
   messageLogs     MessageLog[]
+  documents       ClientDocument[]
 }
 
 model Product {
@@ -207,6 +220,7 @@ model Contract {
   charges                         Charge[]
   services                        ContractedService[]
   projects                        Project[]
+  documents                       ClientDocument[]
 }
 
 model ContractedService {
@@ -332,6 +346,22 @@ model ClientNote {
   criadoEm DateTime @default(now())
   client   Client   @relation(fields: [clientId], references: [id], onDelete: Cascade)
   user     User     @relation(fields: [userId], references: [id])
+}
+
+model ClientDocument {
+  id          String       @id @default(uuid())
+  clientId    String
+  contractId  String?
+  tipo        DocumentType
+  nomeArquivo String
+  url         String
+  mimeType    String
+  tamanho     Int
+  enviadoPor  String?
+  criadoEm    DateTime     @default(now())
+  client      Client       @relation(fields: [clientId], references: [id], onDelete: Cascade)
+  contract    Contract?    @relation(fields: [contractId], references: [id], onDelete: SetNull)
+  uploader    User?        @relation(fields: [enviadoPor], references: [id])
 }
 
 model AuditLog {

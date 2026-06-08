@@ -24,7 +24,10 @@ export const clientSchema = z.object({
   endereco: z.string().optional(),
   segmento: z.string().optional(),
   status: z.enum(['ativo', 'inativo', 'prospecto', 'inadimplente']).default('prospecto'),
-  observacoes: z.string().optional()
+  observacoes: z.string().optional(),
+  contratoAssinadoEm: z.string().optional().or(z.literal('')),
+  contratoAssinadoPorAmbasPartes: z.boolean().default(false),
+  observacaoContrato: z.string().optional()
 });
 export const contractSchema = z.object({
   clientId: z.string().uuid(),

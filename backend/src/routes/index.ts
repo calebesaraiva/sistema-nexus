@@ -2,12 +2,13 @@ import { Router } from 'express';
 import rateLimit from 'express-rate-limit';
 import { auth, permit } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
-import { loginSchema, userSchema, clientSchema, contractSchema, messageGenerateSchema, messageSendSchema, verifyEmailSchema, forgotPasswordSchema, resetPasswordSchema, changeRoleSchema, adminResetPasswordSchema, productSchema, packageSchema, projectSchema, taskStageSchema, projectTaskSchema, taskMoveSchema, taskRejectSchema } from '../validators/schemas';
+import { loginSchema, userSchema, clientSchema, contractSchema, chargeSchema, messageGenerateSchema, messageSendSchema, verifyEmailSchema, forgotPasswordSchema, resetPasswordSchema, changeRoleSchema, adminResetPasswordSchema, productSchema, packageSchema, projectSchema, taskStageSchema, projectTaskSchema, taskMoveSchema, taskRejectSchema } from '../validators/schemas';
 import { forgotPassword, login, me, refresh, register, resetPassword, verifyEmail } from '../controllers/authController';
-import { auditLogs, blockUser, changeUserRole, compensateBarter, createClient, createPackage, createProduct, createProject, createUser, deleteClient, deletePackage, deleteProduct, deleteProject, deleteUser, financialDashboard, getClient, getPackage, getProduct, getUser, listCharges, listClients, listPackages, listPayments, listProducts, listProjects, listUsers, payCharge, resetUserPassword, unblockUser, updateClient, updatePackage, updateProduct, updateProject } from '../controllers/crudController';
+import { auditLogs, blockUser, changeUserRole, compensateBarter, createCharge, createClient, createPackage, createProduct, createProject, createUser, deleteClient, deletePackage, deleteProduct, deleteProject, deleteUser, financialDashboard, getClient, getPackage, getProduct, getUser, listCharges, listClients, listPackages, listPayments, listProducts, listProjects, listUsers, payCharge, resetUserPassword, unblockUser, updateClient, updatePackage, updateProduct, updateProject } from '../controllers/crudController';
 import { createContract, listContracts, updateContractStatus } from '../controllers/contractController';
 import { generateMessage, listTemplates, sendMessage } from '../controllers/messageController';
 import { upload, uploaded } from '../controllers/uploadController';
+import { createClientDocument, deleteDocument, documentUpload, downloadDocument, listClientDocuments } from '../controllers/documentController';
 import { approveTask, createStage, createTask, deleteStage, deleteTask, listStages, listTasks, moveTask, rejectTask, updateStage, updateTask } from '../controllers/taskController';
 
 const router = Router();
@@ -37,6 +38,10 @@ router.get('/clients/:id', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO', '
 router.post('/clients', auth, permit('ADMIN_MASTER', 'ADMIN', 'VENDEDOR'), validate(clientSchema), createClient);
 router.put('/clients/:id', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO'), validate(clientSchema), updateClient);
 router.delete('/clients/:id', auth, permit('ADMIN_MASTER'), deleteClient);
+router.get('/clients/:clientId/documents', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO', 'VENDEDOR', 'SUPORTE'), listClientDocuments);
+router.post('/clients/:clientId/documents', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO'), documentUpload.single('file'), createClientDocument);
+router.get('/documents/:id/download', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO', 'VENDEDOR', 'SUPORTE'), downloadDocument);
+router.delete('/documents/:id', auth, permit('ADMIN_MASTER', 'ADMIN'), deleteDocument);
 
 router.get('/products', auth, listProducts);
 router.get('/products/:id', auth, getProduct);
@@ -54,6 +59,7 @@ router.post('/contracts', auth, permit('ADMIN_MASTER', 'ADMIN'), validate(contra
 router.patch('/contracts/:id/status', auth, permit('ADMIN_MASTER', 'ADMIN'), updateContractStatus);
 
 router.get('/charges', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO'), listCharges);
+router.post('/charges', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO'), validate(chargeSchema), createCharge);
 router.patch('/charges/:id/pay', auth, permit('ADMIN_MASTER', 'FINANCEIRO'), payCharge);
 router.patch('/charges/:id/compensate-barter', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO'), compensateBarter);
 router.get('/payments', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO'), listPayments);
