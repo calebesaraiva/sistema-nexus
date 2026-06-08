@@ -363,11 +363,9 @@ small { color: var(--danger); }
     grid-template-columns: 1fr;
   }
   .finance-actions {
-    position: sticky;
-    top: 82px;
-    z-index: 7;
-    padding: 8px 0;
-    background: var(--bg);
+    position: static;
+    padding: 0;
+    background: transparent;
   }
   .finance-list article {
     border-radius: 12px;
