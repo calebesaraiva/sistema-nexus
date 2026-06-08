@@ -120,7 +120,7 @@ small { color: var(--danger); }
   .cards { grid-template-columns: repeat(2, 1fr); }
 }
 
-@media (max-width: 760px) {
+@media (max-width: 1023px) {
   body { font-size: 16px; }
   .mobile-topbar {
     position: fixed;
@@ -290,4 +290,23 @@ small { color: var(--danger); }
   .login-card { padding: 22px; border-radius: 14px; }
   .login-card h2 { font-size: 27px; }
   .login-links button { min-height: 36px; font-size: 14px; }
+}
+
+@media (min-width: 768px) and (max-width: 1023px) {
+  .main { padding: 96px 24px 104px; }
+  .cards { grid-template-columns: repeat(2, 1fr); }
+  .form-grid { grid-template-columns: repeat(2, 1fr); }
+  .mobile-bottom-nav {
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(680px, calc(100% - 32px));
+    border: 1px solid var(--line);
+    border-bottom: 0;
+    border-radius: 18px 18px 0 0;
+  }
+  .sidebar { width: min(420px, 72vw); }
+}
+
+@media (max-width: 767px) {
+  .cards, .form-grid { grid-template-columns: 1fr; }
 }
