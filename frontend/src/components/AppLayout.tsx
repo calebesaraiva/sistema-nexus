@@ -1,4 +1,4 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { motion } from 'framer-motion';
 import { BarChart3, BriefcaseBusiness, CreditCard, FileText, LayoutDashboard, LogOut, Menu, MessageCircle, Moon, Package, Settings, ShieldCheck, Sun, Users, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
@@ -24,7 +24,9 @@ export function AppLayout() {
   const [theme, setTheme] = useState(localStorage.getItem('nexus.theme') || 'light');
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const items = nav.filter((item) => item.roles.includes(user!.role));
+  const mobileQuick = items.filter((item) => ['/dashboard', '/clientes', '/financeiro', '/projetos'].includes(item.to)).slice(0, 4);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;
@@ -38,7 +40,11 @@ export function AppLayout() {
 
   return (
     <div className="app-shell">
-      <button className="mobile-menu" onClick={() => setOpen(true)} title="Abrir menu"><Menu /></button>
+      <header className="mobile-topbar">
+        <div><b>Nexus Gestão</b><span>{user?.role}</span></div>
+        <button className="mobile-menu" onClick={() => setOpen(true)} title="Abrir menu"><Menu /></button>
+      </header>
+      {open ? <button className="sidebar-backdrop" onClick={() => setOpen(false)} aria-label="Fechar menu" /> : null}
       <aside className={open ? 'sidebar open' : 'sidebar'}>
         <div className="brand"><div className="brand-mark">NX</div><div><b>Nexus Gestão</b><span>Nexus Tecnologia LTDA</span></div><button className="close" onClick={() => setOpen(false)}><X /></button></div>
         <nav>{items.map(({ to, label, icon: Icon }) => <NavLink key={to} to={to} onClick={() => setOpen(false)}><Icon size={18} />{label}</NavLink>)}</nav>
@@ -53,6 +59,18 @@ export function AppLayout() {
           <Outlet />
         </motion.div>
       </main>
+      <nav className="mobile-bottom-nav" aria-label="Atalhos principais">
+        {mobileQuick.map(({ to, label, icon: Icon }) => (
+          <NavLink key={to} to={to}>
+            <Icon size={22} />
+            <span>{label}</span>
+          </NavLink>
+        ))}
+        <button className={location.pathname === '/configuracoes' ? 'active' : ''} onClick={() => setOpen(true)}>
+          <Menu size={22} />
+          <span>Menu</span>
+        </button>
+      </nav>
     </div>
   );
 }

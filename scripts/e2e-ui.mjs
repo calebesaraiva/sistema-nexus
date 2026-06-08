@@ -32,7 +32,7 @@ log.push(`theme after light click: ${await page.evaluate(() => document.document
 
 await page.setViewportSize({ width: 390, height: 844 });
 await page.getByTitle('Abrir menu').click();
-await page.getByRole('link', { name: /Clientes/i }).click();
+await page.locator('aside').getByRole('link', { name: /Clientes/i }).click();
 await expectVisible('Clientes');
 log.push('mobile menu ok');
 
