@@ -33,6 +33,20 @@ export function AppLayout() {
     localStorage.setItem('nexus.theme', theme);
   }, [theme]);
 
+  useEffect(() => {
+    const setViewportHeight = () => {
+      const height = window.visualViewport?.height || window.innerHeight;
+      document.documentElement.style.setProperty('--app-height', `${height}px`);
+    };
+    setViewportHeight();
+    window.visualViewport?.addEventListener('resize', setViewportHeight);
+    window.addEventListener('resize', setViewportHeight);
+    return () => {
+      window.visualViewport?.removeEventListener('resize', setViewportHeight);
+      window.removeEventListener('resize', setViewportHeight);
+    };
+  }, []);
+
   function exit() {
     logout();
     navigate('/login');
