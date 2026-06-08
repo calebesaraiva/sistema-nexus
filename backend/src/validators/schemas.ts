@@ -38,6 +38,13 @@ export const contractSchema = z.object({
   valorTotalContrato: z.coerce.number().nonnegative(),
   valorImplantacao: z.coerce.number().nonnegative().default(0),
   entrada: z.coerce.number().nonnegative().default(0),
+  tipoRecebimento: z.enum(['dinheiro', 'permuta', 'misto']).default('dinheiro'),
+  valorPermuta: z.coerce.number().nonnegative().default(0),
+  descricaoPermuta: z.string().optional(),
+  parceiroPermuta: z.string().optional(),
+  observacoesPermuta: z.string().optional(),
+  prazoPermuta: z.string().optional(),
+  statusPermuta: z.enum(['pendente', 'compensada', 'parcial', 'cancelado']).optional(),
   implantacaoParcelada: z.boolean().default(false),
   quantidadeParcelasImplantacao: z.coerce.number().int().min(1).optional(),
   observacoes: z.string().optional()
@@ -45,7 +52,7 @@ export const contractSchema = z.object({
 export const chargeSchema = z.object({
   clientId: z.string().uuid(),
   contractId: z.string().uuid().optional(),
-  tipo: z.enum(['mensalidade', 'implantacao', 'avulsa']),
+  tipo: z.enum(['mensalidade', 'implantacao', 'avulsa', 'permuta']),
   descricao: z.string().min(2),
   valor: z.coerce.number().nonnegative(),
   dataVencimento: z.string(),

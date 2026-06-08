@@ -220,6 +220,7 @@ export async function listCharges(req: Request, res: Response) {
 export async function payCharge(req: Request, res: Response) {
   const charge = await prisma.charge.findUnique({ where: { id: paramId(req.params.id) } });
   if (!charge) throw new AppError(404, 'Cobrança não encontrada.');
+  if (charge.tipo === 'permuta') throw new AppError(400, 'Permuta não deve ser marcada como pagamento em dinheiro. Use a ação de compensação.');
   const paid = await prisma.$transaction(async (tx) => {
     const payment = await tx.payment.create({
       data: {
@@ -235,6 +236,26 @@ export async function payCharge(req: Request, res: Response) {
   });
   await audit(req, 'Confirmação de pagamento', 'Charge', charge.id);
   return ok(res, paid, 'Pagamento confirmado');
+}
+
+export async function compensateBarter(req: Request, res: Response) {
+  const charge = await prisma.charge.findUnique({ where: { id: paramId(req.params.id) }, include: { contract: true } });
+  if (!charge) throw new AppError(404, 'Lançamento não encontrado.');
+  if (charge.tipo !== 'permuta') throw new AppError(400, 'Esta ação é exclusiva para lançamentos de permuta.');
+  const status = req.body.status || 'compensada';
+  if (!['pendente', 'compensada', 'parcial', 'cancelado'].includes(status)) throw new AppError(400, 'Status de permuta inválido.');
+  const updated = await prisma.$transaction(async (tx) => {
+    const barter = await tx.charge.update({
+      where: { id: charge.id },
+      data: { status, dataPagamento: status === 'compensada' ? new Date() : charge.dataPagamento, observacoes: req.body.observacoes ?? charge.observacoes }
+    });
+    if (charge.contractId) {
+      await tx.contract.update({ where: { id: charge.contractId }, data: { statusPermuta: barter.status } });
+    }
+    return barter;
+  });
+  await audit(req, 'Permuta marcada como compensada', 'Charge', charge.id, { status: updated.status });
+  return ok(res, updated, 'Permuta compensada com sucesso');
 }
 
 export async function listPayments(_req: Request, res: Response) {
@@ -268,23 +289,41 @@ export async function financialDashboard(_req: Request, res: Response) {
   const now = new Date();
   const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
   const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const [charges, clientsActive, contractsActive] = await Promise.all([
+  const [charges, allCharges, clientsActive, contractsActive, barterContracts, mixedContracts] = await Promise.all([
     prisma.charge.findMany({ where: { dataVencimento: { gte: monthStart, lte: monthEnd } }, include: { client: true, contract: true } }),
+    prisma.charge.findMany({ include: { client: true, contract: true } }),
     prisma.client.count({ where: { status: 'ativo', deletedAt: null } }),
-    prisma.contract.count({ where: { status: 'ativo' } })
+    prisma.contract.count({ where: { status: 'ativo' } }),
+    prisma.contract.findMany({ where: { status: 'ativo', tipoRecebimento: 'permuta' }, include: { client: true } }),
+    prisma.contract.findMany({ where: { status: 'ativo', tipoRecebimento: 'misto' }, include: { client: true } })
   ]);
-  const sum = (status?: string) => charges.filter((c) => !status || c.status === status).reduce((a, c) => a + Number(c.valor), 0);
+  const cashCharges = charges.filter((c) => c.tipo !== 'permuta');
+  const barterCharges = allCharges.filter((c) => c.tipo === 'permuta');
+  const sum = (items: typeof charges, status?: string) => items.filter((c) => !status || c.status === status).reduce((a, c) => a + Number(c.valor), 0);
+  const activeBarterValue = barterContracts.reduce((a, c) => a + Number(c.valorPermuta), 0) + mixedContracts.reduce((a, c) => a + Number(c.valorPermuta), 0);
+  const monthBarter = charges.filter((c) => c.tipo === 'permuta');
+  const barterCompensated = sum(barterCharges, 'compensada');
+  const barterPending = sum(barterCharges.filter((c) => c.status === 'pendente' || c.status === 'parcial'));
   return ok(res, {
-    receitaPrevistaMes: sum(),
-    receitaRecebidaMes: sum('pago'),
-    totalPendente: sum('pendente'),
-    totalVencido: sum('vencido'),
+    receitaPrevistaMes: sum(cashCharges),
+    receitaRecebidaMes: sum(cashCharges, 'pago'),
+    totalPendente: sum(cashCharges, 'pendente'),
+    totalVencido: sum(cashCharges, 'vencido'),
+    valorPermutasAtivas: activeBarterValue,
+    valorPermutasMes: sum(monthBarter),
+    valorPermutasPendentes: barterPending,
+    valorPermutasCompensadas: barterCompensated,
+    contratosPermuta: barterContracts.length,
+    contratosMistos: mixedContracts.length,
+    clientesPermuta: [...barterContracts, ...mixedContracts].map((contract) => contract.client),
+    totalEconomicoGeral: sum(cashCharges) + sum(monthBarter),
     clientesAtivos: clientsActive,
     contratosAtivos: contractsActive,
-    proximosVencimentos: charges.slice(0, 8),
+    proximosVencimentos: cashCharges.slice(0, 8),
     clientesInadimplentes: await prisma.client.findMany({ where: { status: 'inadimplente', deletedAt: null } }),
     receitaPorMes: [],
-    cobrancasPorStatus: ['pendente', 'pago', 'vencido', 'cancelado'].map((status) => ({ status, total: sum(status) })),
+    cobrancasPorStatus: ['pendente', 'pago', 'vencido', 'cancelado'].map((status) => ({ status, total: sum(cashCharges, status) })),
+    permutasPorStatus: ['pendente', 'compensada', 'parcial', 'cancelado'].map((status) => ({ status, total: sum(barterCharges, status) })),
     contratosProximosVencimento: await prisma.contract.findMany({ where: { status: 'ativo', dataFim: { lte: new Date(now.getFullYear(), now.getMonth() + 2, now.getDate()) } }, include: { client: true } })
   });
 }

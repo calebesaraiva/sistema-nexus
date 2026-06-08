@@ -14,6 +14,13 @@ type ContractInput = {
   valorTotalContrato: number;
   valorImplantacao: number;
   entrada: number;
+  tipoRecebimento: 'dinheiro' | 'permuta' | 'misto';
+  valorPermuta: number;
+  descricaoPermuta?: string;
+  parceiroPermuta?: string;
+  observacoesPermuta?: string;
+  prazoPermuta?: string;
+  statusPermuta?: 'pendente' | 'compensada' | 'parcial' | 'cancelado';
   implantacaoParcelada: boolean;
   quantidadeParcelasImplantacao?: number;
   observacoes?: string;
@@ -44,24 +51,34 @@ export async function createContractWithCharges(input: ContractInput) {
         valorTotalContrato: input.valorTotalContrato,
         valorImplantacao: input.valorImplantacao,
         entrada: input.entrada,
+        tipoRecebimento: input.tipoRecebimento || 'dinheiro',
+        valorPermuta: input.valorPermuta || 0,
+        descricaoPermuta: input.descricaoPermuta,
+        parceiroPermuta: input.parceiroPermuta,
+        observacoesPermuta: input.observacoesPermuta,
+        prazoPermuta: input.prazoPermuta ? new Date(`${input.prazoPermuta}T00:00:00`) : undefined,
+        statusPermuta: input.statusPermuta || (input.tipoRecebimento === 'permuta' || input.tipoRecebimento === 'misto' ? 'pendente' : undefined),
         implantacaoParcelada: input.implantacaoParcelada,
         quantidadeParcelasImplantacao: input.quantidadeParcelasImplantacao,
         observacoes: input.observacoes
       }
     });
 
-    const monthly = Array.from({ length: input.validadeMeses }).map((_, index) => ({
+    const hasCash = (input.tipoRecebimento || 'dinheiro') !== 'permuta';
+    const hasBarter = ['permuta', 'misto'].includes(input.tipoRecebimento || 'dinheiro') && Number(input.valorPermuta || 0) > 0;
+
+    const monthly = hasCash ? Array.from({ length: input.validadeMeses }).map((_, index) => ({
       clientId: input.clientId,
       contractId: contract.id,
       tipo: 'mensalidade' as const,
       descricao: `Mensalidade ${index + 1}/${input.validadeMeses} - ${input.titulo}`,
       valor: input.valorMensal,
       dataVencimento: dueDateFrom(start, index, input.diaPagamentoMensal)
-    }));
+    })) : [];
 
     const implantationBalance = Math.max(input.valorImplantacao - input.entrada, 0);
     const installments = input.implantacaoParcelada ? input.quantidadeParcelasImplantacao || 1 : implantationBalance > 0 ? 1 : 0;
-    const implantation = implantationBalance > 0
+    const implantation = hasCash && implantationBalance > 0
       ? Array.from({ length: installments }).map((_, index) => ({
           clientId: input.clientId,
           contractId: contract.id,
@@ -72,7 +89,18 @@ export async function createContractWithCharges(input: ContractInput) {
         }))
       : [];
 
-    await tx.charge.createMany({ data: [...monthly, ...implantation] });
+    const barter = hasBarter ? [{
+      clientId: input.clientId,
+      contractId: contract.id,
+      tipo: 'permuta' as const,
+      descricao: input.descricaoPermuta || `Permuta - ${input.titulo}`,
+      valor: input.valorPermuta,
+      dataVencimento: input.prazoPermuta ? new Date(`${input.prazoPermuta}T00:00:00`) : end,
+      status: input.statusPermuta || 'pendente',
+      observacoes: input.observacoesPermuta
+    }] : [];
+
+    await tx.charge.createMany({ data: [...monthly, ...implantation, ...barter] });
 
     if (packageWithProducts) {
       await tx.contractedService.createMany({

@@ -11,7 +11,13 @@ export async function listContracts(_req: Request, res: Response) {
 
 export async function createContract(req: Request, res: Response) {
   const contract = await createContractWithCharges(req.body);
-  await audit(req, 'Criação de contrato', 'Contract', contract?.id, { charges: contract?.charges.length });
+  const isBarter = contract?.tipoRecebimento === 'permuta' || contract?.tipoRecebimento === 'misto';
+  await audit(req, isBarter ? 'Contrato criado com permuta' : 'Criação de contrato', 'Contract', contract?.id, {
+    charges: contract?.charges.length,
+    tipoRecebimento: contract?.tipoRecebimento,
+    valorPermuta: contract?.valorPermuta,
+    descricaoPermuta: contract?.descricaoPermuta
+  });
   return ok(res, contract, 'Contrato cadastrado com sucesso. Cobranças geradas automaticamente.');
 }
 

@@ -81,8 +81,10 @@ th { color: var(--muted); font-size: 12px; text-transform: uppercase; background
 td { color: var(--ink); }
 .badge { display: inline-flex; align-items: center; min-height: 26px; border-radius: 999px; padding: 4px 10px; font-size: 12px; background: #eef4ff; color: #175cd3; }
 .badge-ativo, .badge-pago, .badge-enviada { background: #ecfdf3; color: var(--ok); }
-.badge-vencido, .badge-inadimplente { background: #fef3f2; color: var(--danger); }
-.badge-pendente, .badge-prospecto { background: #fffaeb; color: var(--warn); }
+.badge-vencido, .badge-inadimplente, .badge-cancelado { background: #fef3f2; color: var(--danger); }
+.badge-pendente, .badge-prospecto, .badge-parcial { background: #fffaeb; color: var(--warn); }
+.badge-permuta, .badge-misto, .badge-compensada { background: #ecfeff; color: #0e7490; }
+.badge-dinheiro { background: #eff6ff; color: #175cd3; }
 
 .state { min-height: 240px; display: grid; place-items: center; align-content: center; gap: 10px; color: var(--muted); text-align: center; padding: 26px; }
 .state svg { color: var(--brand); width: 34px; height: 34px; }
@@ -122,6 +124,15 @@ small { color: var(--danger); }
 .finance-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
 .finance-card { min-height: 132px; }
 .finance-charts, .finance-lists { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; margin-bottom: 14px; }
+.barter-panel { display: grid; gap: 14px; margin-bottom: 14px; border-color: color-mix(in srgb, var(--brand), var(--line) 65%); }
+.barter-panel p { max-width: 720px; }
+.barter-metrics { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 12px; }
+.barter-box { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; background: color-mix(in srgb, var(--panel), var(--brand) 5%); }
+.barter-box h2 { grid-column: 1 / -1; margin-bottom: 0; }
+.client-detail-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin-bottom: 14px; }
+.client-summary { display: grid; gap: 8px; align-content: start; }
+.client-summary span { color: var(--muted); font-size: 13px; font-weight: 700; }
+.client-summary b { font-size: 20px; }
 .finance-list { display: grid; gap: 10px; align-content: start; }
 .finance-list article { display: grid; gap: 6px; padding: 12px; border: 1px solid var(--line); border-radius: 8px; background: color-mix(in srgb, var(--panel), var(--bg) 42%); }
 .finance-list article b { font-size: 15px; }
@@ -132,6 +143,8 @@ small { color: var(--danger); }
   .finance-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .finance-filters { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .finance-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .barter-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .client-detail-grid { grid-template-columns: 1fr; }
 }
 
 @media (max-width: 1023px) {
@@ -301,7 +314,10 @@ small { color: var(--danger); }
   .finance-filters,
   .finance-grid,
   .finance-charts,
-  .finance-lists {
+  .finance-lists,
+  .barter-metrics,
+  .barter-box,
+  .client-detail-grid {
     grid-template-columns: 1fr;
   }
   .finance-actions {

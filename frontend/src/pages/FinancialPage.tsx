@@ -18,6 +18,14 @@ type DashboardData = {
   proximosVencimentos: Charge[];
   clientesInadimplentes: Client[];
   cobrancasPorStatus: { status: string; total: number }[];
+  valorPermutasAtivas: number;
+  valorPermutasMes: number;
+  valorPermutasPendentes: number;
+  valorPermutasCompensadas: number;
+  contratosPermuta: number;
+  contratosMistos: number;
+  totalEconomicoGeral: number;
+  clientesPermuta: Client[];
 };
 type Client = { id: string; nomeEmpresa: string; status?: string; cidade?: string };
 type Charge = { id: string; descricao: string; valor: number; dataVencimento: string; status: string; tipo: string; client?: Client };
@@ -67,14 +75,15 @@ export function FinancialPage() {
 
   const totals = useMemo(() => {
     const sum = (items: Charge[], status?: string) => items.filter((item) => !status || item.status === status).reduce((acc, item) => acc + Number(item.valor), 0);
+    const cashFilteredCharges = filteredCharges.filter((item) => item.tipo !== 'permuta');
     const paid = payments.reduce((acc, item) => acc + Number(item.valorPago), 0);
     const avgTicket = payments.length ? paid / payments.length : 0;
     const mrr = charges.filter((item) => item.tipo === 'mensalidade' && item.status !== 'cancelado').reduce((acc, item) => acc + Number(item.valor), 0);
     return {
-      prevista: sum(filteredCharges),
+      prevista: sum(cashFilteredCharges),
       recebida: paid,
-      pendente: sum(filteredCharges, 'pendente'),
-      vencida: sum(filteredCharges, 'vencido'),
+      pendente: sum(cashFilteredCharges, 'pendente'),
+      vencida: sum(cashFilteredCharges, 'vencido'),
       ticket: avgTicket,
       mrr
     };
@@ -95,6 +104,13 @@ export function FinancialPage() {
     if (!confirm('Confirmar pagamento desta cobrança?')) return;
     await api.patch(`/charges/${charge.id}/pay`, {});
     toast.success('Pagamento confirmado');
+    await load();
+  }
+
+  async function compensate(charge: Charge) {
+    if (!confirm('Marcar esta permuta como compensada?')) return;
+    await api.patch(`/charges/${charge.id}/compensate-barter`, { status: 'compensada' });
+    toast.success('Permuta compensada com sucesso');
     await load();
   }
 
@@ -126,8 +142,8 @@ export function FinancialPage() {
       <div className="finance-filters panel">
         <label>Mês<select value={filters.mes} onChange={(e) => setFilters({ ...filters, mes: e.target.value })}>{Array.from({ length: 12 }).map((_, index) => <option key={index + 1} value={String(index + 1)}>{index + 1}</option>)}</select></label>
         <label>Ano<input value={filters.ano} onChange={(e) => setFilters({ ...filters, ano: e.target.value })} /></label>
-        <label>Status<select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option value="todos">Todos</option><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="vencido">Vencido</option><option value="cancelado">Cancelado</option></select></label>
-        <label>Tipo<select value={filters.tipo} onChange={(e) => setFilters({ ...filters, tipo: e.target.value })}><option value="todos">Todos</option><option value="mensalidade">Mensalidade</option><option value="implantacao">Implantação</option><option value="avulsa">Avulsa</option></select></label>
+        <label>Status<select value={filters.status} onChange={(e) => setFilters({ ...filters, status: e.target.value })}><option value="todos">Todos</option><option value="pendente">Pendente</option><option value="pago">Pago</option><option value="vencido">Vencido</option><option value="compensada">Compensada</option><option value="parcial">Parcial</option><option value="cancelado">Cancelado</option></select></label>
+        <label>Tipo<select value={filters.tipo} onChange={(e) => setFilters({ ...filters, tipo: e.target.value })}><option value="todos">Todos</option><option value="mensalidade">Mensalidade</option><option value="implantacao">Implantação</option><option value="avulsa">Avulsa</option><option value="permuta">Permuta</option></select></label>
         <label>Cliente<input placeholder="Buscar cliente" value={filters.cliente} onChange={(e) => setFilters({ ...filters, cliente: e.target.value })} /></label>
       </div>
       <div className="finance-grid">
@@ -140,13 +156,24 @@ export function FinancialPage() {
         <FinanceCard icon={CalendarClock} label="Contratos ativos" value={String(dashboard.contratosAtivos)} />
         <FinanceCard icon={AlertTriangle} label="Inadimplentes" value={String(dashboard.clientesInadimplentes?.length || 0)} />
       </div>
+      <div className="panel barter-panel">
+        <div><h2>Permutas</h2><p>Valores econômicos recebidos em troca. Não representam caixa.</p></div>
+        <div className="barter-metrics">
+          <FinanceCard icon={Wallet} label="Permutas ativas" value={brl(dashboard.valorPermutasAtivas)} />
+          <FinanceCard icon={CreditCard} label="Compensadas" value={brl(dashboard.valorPermutasCompensadas)} />
+          <FinanceCard icon={CalendarClock} label="Pendentes" value={brl(dashboard.valorPermutasPendentes)} />
+          <FinanceCard icon={AlertTriangle} label="Contratos permuta/misto" value={`${dashboard.contratosPermuta}/${dashboard.contratosMistos}`} />
+          <FinanceCard icon={Wallet} label="Total econômico geral" value={brl(dashboard.totalEconomicoGeral)} />
+        </div>
+      </div>
       <div className="finance-charts">
         <div className="panel"><h2>Recebido x pendente</h2><ResponsiveContainer height={280}><BarChart data={receivedPending}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="nome" /><YAxis /><Tooltip formatter={(value) => brl(Number(value))} /><Bar dataKey="valor" radius={[8, 8, 0, 0]} /></BarChart></ResponsiveContainer></div>
-        <div className="panel"><h2>Receita por tipo</h2><ResponsiveContainer height={280}><PieChart><Pie data={typeData} dataKey="valor" nameKey="tipo" outerRadius={95} label>{typeData.map((_, index) => <Cell key={index} />)}</Pie><Tooltip formatter={(value) => brl(Number(value))} /></PieChart></ResponsiveContainer></div>
+        <div className="panel"><h2>Receita em dinheiro por tipo</h2><ResponsiveContainer height={280}><PieChart><Pie data={typeData} dataKey="valor" nameKey="tipo" outerRadius={95} label>{typeData.map((_, index) => <Cell key={index} />)}</Pie><Tooltip formatter={(value) => brl(Number(value))} /></PieChart></ResponsiveContainer></div>
       </div>
       <div className="finance-lists">
-        <FinanceList title="Próximos vencimentos" items={dashboard.proximosVencimentos || []} onPay={pay} />
-        <FinanceList title="Cobranças vencidas" items={charges.filter((charge) => charge.status === 'vencido').slice(0, 8)} onPay={pay} />
+        <FinanceList title="Próximos vencimentos" items={dashboard.proximosVencimentos || []} onPay={pay} onCompensate={compensate} />
+        <FinanceList title="Cobranças vencidas" items={charges.filter((charge) => charge.status === 'vencido').slice(0, 8)} onPay={pay} onCompensate={compensate} />
+        <FinanceList title="Permutas pendentes" items={charges.filter((charge) => charge.tipo === 'permuta' && ['pendente', 'parcial'].includes(charge.status)).slice(0, 8)} onPay={pay} onCompensate={compensate} />
         <div className="panel finance-list"><h2>Últimos pagamentos</h2>{payments.slice(0, 8).map((payment) => <article key={payment.id}><b>{payment.client?.nomeEmpresa || 'Cliente'}</b><span>{brl(payment.valorPago)} · {shortDate(payment.dataPagamento)} · {payment.metodoPagamento}</span></article>)}</div>
         <div className="panel finance-list"><h2>Clientes inadimplentes</h2>{(dashboard.clientesInadimplentes || []).length ? dashboard.clientesInadimplentes.map((client) => <article key={client.id}><b>{client.nomeEmpresa}</b><span>{client.cidade || 'Cidade não informada'}</span><Badge>inadimplente</Badge></article>) : <span className="muted-line">Nenhum inadimplente no momento.</span>}</div>
       </div>
@@ -158,6 +185,6 @@ function FinanceCard({ icon: Icon, label, value }: { icon: typeof Wallet; label:
   return <div className="stat-card finance-card"><Icon /><span>{label}</span><b>{value}</b></div>;
 }
 
-function FinanceList({ title, items, onPay }: { title: string; items: Charge[]; onPay: (charge: Charge) => void }) {
-  return <div className="panel finance-list"><h2>{title}</h2>{items.length ? items.slice(0, 8).map((charge) => <article key={charge.id}><b>{charge.client?.nomeEmpresa || 'Cliente'}</b><span>{charge.descricao} · {brl(charge.valor)} · {shortDate(charge.dataVencimento)}</span><Badge>{charge.status}</Badge>{charge.status !== 'pago' ? <Button type="button" onClick={() => onPay(charge)}>Confirmar pagamento</Button> : null}</article>) : <span className="muted-line">Nenhum item encontrado.</span>}</div>;
+function FinanceList({ title, items, onPay, onCompensate }: { title: string; items: Charge[]; onPay: (charge: Charge) => void; onCompensate: (charge: Charge) => void }) {
+  return <div className="panel finance-list"><h2>{title}</h2>{items.length ? items.slice(0, 8).map((charge) => <article key={charge.id}><b>{charge.client?.nomeEmpresa || 'Cliente'}</b><span>{charge.descricao} · {brl(charge.valor)} · {shortDate(charge.dataVencimento)}</span><Badge>{charge.tipo === 'permuta' ? `permuta-${charge.status}` : charge.status}</Badge>{charge.tipo === 'permuta' && charge.status !== 'compensada' ? <Button type="button" onClick={() => onCompensate(charge)}>Marcar permuta como compensada</Button> : null}{charge.tipo !== 'permuta' && charge.status !== 'pago' ? <Button type="button" onClick={() => onPay(charge)}>Confirmar pagamento</Button> : null}</article>) : <span className="muted-line">Nenhum item encontrado.</span>}</div>;
 }

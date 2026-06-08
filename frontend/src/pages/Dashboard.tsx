@@ -4,7 +4,7 @@ import { CreditCard, FileText, Users, Wallet } from 'lucide-react';
 import { api } from '../lib/api';
 import { LoadingState, ErrorState } from '../components/States';
 
-type DashboardData = { receitaPrevistaMes: number; receitaRecebidaMes: number; totalPendente: number; totalVencido: number; clientesAtivos: number; contratosAtivos: number; cobrancasPorStatus: { status: string; total: number }[] };
+type DashboardData = { receitaPrevistaMes: number; receitaRecebidaMes: number; valorPermutasAtivas: number; totalPendente: number; totalVencido: number; clientesAtivos: number; contratosAtivos: number; cobrancasPorStatus: { status: string; total: number }[] };
 const brl = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v || 0);
 
 export function Dashboard() {
@@ -13,7 +13,7 @@ export function Dashboard() {
   useEffect(() => { api.get<unknown, { data: DashboardData }>('/dashboard/financial').then((res) => setData(res.data)).catch(() => setError(true)); }, []);
   if (error) return <ErrorState text="Não foi possível carregar o dashboard." />;
   if (!data) return <LoadingState />;
-  return <section><Header title="Dashboard financeiro" action="Indicadores do mês" /><div className="cards"><Stat icon={Wallet} label="Receita prevista" value={brl(data.receitaPrevistaMes)} /><Stat icon={CreditCard} label="Receita recebida" value={brl(data.receitaRecebidaMes)} /><Stat icon={Users} label="Clientes ativos" value={String(data.clientesAtivos)} /><Stat icon={FileText} label="Contratos ativos" value={String(data.contratosAtivos)} /></div><div className="panel"><h2>Cobranças por status</h2><ResponsiveContainer height={320}><BarChart data={data.cobrancasPorStatus}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="status" /><YAxis /><Tooltip formatter={(value) => brl(Number(value))} /><Bar dataKey="total" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div></section>;
+  return <section><Header title="Dashboard financeiro" action="Indicadores do mês" /><div className="cards"><Stat icon={Wallet} label="Receita prevista" value={brl(data.receitaPrevistaMes)} /><Stat icon={CreditCard} label="Receita recebida" value={brl(data.receitaRecebidaMes)} /><Stat icon={Wallet} label="Valor em permuta" value={brl(data.valorPermutasAtivas)} /><Stat icon={Users} label="Clientes ativos" value={String(data.clientesAtivos)} /><Stat icon={FileText} label="Contratos ativos" value={String(data.contratosAtivos)} /></div><div className="panel"><h2>Cobranças por status</h2><ResponsiveContainer height={320}><BarChart data={data.cobrancasPorStatus}><CartesianGrid strokeDasharray="3 3" /><XAxis dataKey="status" /><YAxis /><Tooltip formatter={(value) => brl(Number(value))} /><Bar dataKey="total" radius={[6, 6, 0, 0]} /></BarChart></ResponsiveContainer></div></section>;
 }
 
 export function Header({ title, action }: { title: string; action?: string }) {

@@ -4,7 +4,7 @@ import { auth, permit } from '../middlewares/auth';
 import { validate } from '../middlewares/validate';
 import { loginSchema, userSchema, clientSchema, contractSchema, messageGenerateSchema, messageSendSchema, verifyEmailSchema, forgotPasswordSchema, resetPasswordSchema, changeRoleSchema, adminResetPasswordSchema, productSchema, packageSchema, projectSchema, taskStageSchema, projectTaskSchema, taskMoveSchema, taskRejectSchema } from '../validators/schemas';
 import { forgotPassword, login, me, refresh, register, resetPassword, verifyEmail } from '../controllers/authController';
-import { auditLogs, blockUser, changeUserRole, createClient, createPackage, createProduct, createProject, createUser, deleteClient, deletePackage, deleteProduct, deleteProject, deleteUser, financialDashboard, getClient, getPackage, getProduct, getUser, listCharges, listClients, listPackages, listPayments, listProducts, listProjects, listUsers, payCharge, resetUserPassword, unblockUser, updateClient, updatePackage, updateProduct, updateProject } from '../controllers/crudController';
+import { auditLogs, blockUser, changeUserRole, compensateBarter, createClient, createPackage, createProduct, createProject, createUser, deleteClient, deletePackage, deleteProduct, deleteProject, deleteUser, financialDashboard, getClient, getPackage, getProduct, getUser, listCharges, listClients, listPackages, listPayments, listProducts, listProjects, listUsers, payCharge, resetUserPassword, unblockUser, updateClient, updatePackage, updateProduct, updateProject } from '../controllers/crudController';
 import { createContract, listContracts, updateContractStatus } from '../controllers/contractController';
 import { generateMessage, listTemplates, sendMessage } from '../controllers/messageController';
 import { upload, uploaded } from '../controllers/uploadController';
@@ -55,6 +55,7 @@ router.patch('/contracts/:id/status', auth, permit('ADMIN_MASTER', 'ADMIN'), upd
 
 router.get('/charges', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO'), listCharges);
 router.patch('/charges/:id/pay', auth, permit('ADMIN_MASTER', 'FINANCEIRO'), payCharge);
+router.patch('/charges/:id/compensate-barter', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO'), compensateBarter);
 router.get('/payments', auth, permit('ADMIN_MASTER', 'ADMIN', 'FINANCEIRO'), listPayments);
 router.get('/dashboard/financial', auth, financialDashboard);
 router.get('/projects', auth, permit('ADMIN_MASTER', 'ADMIN', 'SUPORTE'), listProjects);

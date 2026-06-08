@@ -30,10 +30,17 @@ enum ContractStatus {
   encerrado
 }
 
+enum ReceiptType {
+  dinheiro
+  permuta
+  misto
+}
+
 enum ChargeType {
   mensalidade
   implantacao
   avulsa
+  permuta
 }
 
 enum ChargeStatus {
@@ -41,6 +48,8 @@ enum ChargeStatus {
   pago
   vencido
   cancelado
+  compensada
+  parcial
 }
 
 enum PaymentMethod {
@@ -179,6 +188,13 @@ model Contract {
   valorTotalContrato              Decimal
   valorImplantacao                Decimal             @default(0)
   entrada                         Decimal             @default(0)
+  tipoRecebimento                 ReceiptType         @default(dinheiro)
+  valorPermuta                    Decimal             @default(0)
+  descricaoPermuta                String?
+  parceiroPermuta                 String?
+  observacoesPermuta              String?
+  prazoPermuta                    DateTime?
+  statusPermuta                   ChargeStatus?
   implantacaoParcelada            Boolean             @default(false)
   quantidadeParcelasImplantacao   Int?
   status                          ContractStatus      @default(ativo)
