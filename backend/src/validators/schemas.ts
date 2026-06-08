@@ -10,6 +10,11 @@ export const userSchema = z.object({
   senha: z.string().min(6),
   role: z.enum(['ADMIN_MASTER', 'ADMIN', 'FINANCEIRO', 'VENDEDOR', 'SUPORTE'])
 });
+export const userUpdateSchema = z.object({
+  nome: z.string().min(2),
+  email: z.string().email(),
+  role: z.enum(['ADMIN_MASTER', 'ADMIN', 'FINANCEIRO', 'VENDEDOR', 'SUPORTE'])
+});
 export const changeRoleSchema = z.object({ role: z.enum(['ADMIN_MASTER', 'ADMIN', 'FINANCEIRO', 'VENDEDOR', 'SUPORTE']) });
 export const adminResetPasswordSchema = z.object({ senha: z.string().min(8) });
 export const clientSchema = z.object({

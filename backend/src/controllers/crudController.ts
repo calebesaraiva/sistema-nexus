@@ -44,6 +44,41 @@ export async function createUser(req: Request, res: Response) {
   return ok(res, user, 'Usuário criado com sucesso. Código de confirmação enviado por e-mail.');
 }
 
+export async function updateUser(req: Request, res: Response) {
+  const id = paramId(req.params.id);
+  const target = await prisma.user.findUnique({ where: { id } });
+  if (!target) throw new AppError(404, 'Usuário não encontrado.');
+  const nextRole = req.body.role;
+  if (nextRole === 'ADMIN_MASTER' && target.role !== 'ADMIN_MASTER') {
+    const masterCount = await prisma.user.count({ where: { role: 'ADMIN_MASTER' } });
+    if (masterCount >= 2) throw new AppError(400, 'O sistema permite no máximo 2 usuários ADMIN_MASTER.');
+  }
+  if (target.role === 'ADMIN_MASTER' && nextRole !== 'ADMIN_MASTER') {
+    const masterCount = await prisma.user.count({ where: { role: 'ADMIN_MASTER', ativo: true } });
+    if (masterCount <= 1) throw new AppError(400, 'Não é permitido remover o último ADMIN_MASTER ativo.');
+  }
+  const emailChanged = target.email.toLowerCase() !== String(req.body.email).toLowerCase();
+  const code = emailChanged ? generateCode() : null;
+  const user = await prisma.user.update({
+    where: { id },
+    data: {
+      nome: req.body.nome,
+      email: req.body.email,
+      role: nextRole,
+      emailVerificado: emailChanged ? false : target.emailVerificado,
+      emailVerificationCodeHash: code ? await hashCode(code) : target.emailVerificationCodeHash,
+      emailVerificationExpiresAt: code ? addMinutes(30) : target.emailVerificationExpiresAt
+    },
+    select: selectUser
+  });
+  if (code) {
+    const mail = professionalApprovalEmail(user.nome, code);
+    await sendMail({ to: user.email, ...mail });
+  }
+  await audit(req, 'Edição de usuário', 'User', user.id, { emailChanged, role: user.role });
+  return ok(res, user, emailChanged ? 'Usuário atualizado. Código de confirmação enviado ao novo e-mail.' : 'Usuário atualizado com sucesso');
+}
+
 export async function changeUserRole(req: Request, res: Response) {
   if (req.body.role === 'ADMIN_MASTER') {
     const masterCount = await prisma.user.count({ where: { role: 'ADMIN_MASTER' } });
