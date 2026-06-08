@@ -26,7 +26,7 @@ export function AppLayout() {
   const navigate = useNavigate();
   const location = useLocation();
   const items = nav.filter((item) => item.roles.includes(user!.role));
-  const mobileQuick = items.filter((item) => ['/dashboard', '/clientes', '/financeiro', '/projetos'].includes(item.to)).slice(0, 4);
+  const mobileQuick = items.filter((item) => ['/dashboard', '/clientes', '/financeiro', '/contratos'].includes(item.to)).slice(0, 4);
 
   useEffect(() => {
     document.documentElement.dataset.theme = theme;

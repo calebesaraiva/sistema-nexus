@@ -10,6 +10,7 @@ import { EmptyState, LoadingState } from '../components/States';
 import { UserAdminPanel } from './UserAdminPanel';
 import { CatalogPage } from './CatalogPage';
 import { ProjectBoard } from './ProjectBoard';
+import { FinancialPage } from './FinancialPage';
 
 type AnyRecord = Record<string, unknown> & { id?: string; status?: string; nome?: string; nomeEmpresa?: string; titulo?: string; email?: string };
 const endpoints: Record<string, string> = {
@@ -45,6 +46,7 @@ export function ResourcePage({ kind, title }: { kind: string; title: string }) {
 
   if (kind === 'settings') return <section><Header title={title} /><div className="panel"><EmptyState title="Configurações globais" text="Área reservada para parâmetros críticos do ADMIN_MASTER." /></div></section>;
   if (kind === 'users') return <UserAdminPanel />;
+  if (kind === 'financial') return <FinancialPage />;
   if (kind === 'products') return <CatalogPage mode="products" />;
   if (kind === 'packages') return <CatalogPage mode="packages" />;
   if (kind === 'projects') return <ProjectBoard />;
